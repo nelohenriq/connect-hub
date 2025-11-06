@@ -1,0 +1,564 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  gender            String
+  bio               String?
+  location          String?
+  latitude          Float?
+  longitude         Float?
+  profilePicture    String?
+  verificationVideo String?
+  isVerified        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Profile data
+  profile Profile?
+
+  // Matching data
+  sentMatches     Match[] @relation("Sender")
+  receivedMatches Match[] @relation("Receiver")
+  sentLikes       Like[]  @relation("Liker")
+  receivedLikes   Like[]  @relation("Liked")
+
+  // Analytics
+  analytics UserAnalytics?
+
+  // Anti-addiction
+  sessionLimits SessionLimit[]
+
+  // Messaging
+  sentMessages            Message[]               @relation("MessageSender")
+  conversations           Conversation[]
+  algorithmTransparencies AlgorithmTransparency[]
+  conversationStarters    ConversationStarter[]
+  messageReports          MessageReport[]
+
+  // Safety & Trust (Sprint 4)
+  trustScore                TrustScore?
+  restrictions              UserRestrictions[]
+  contentModerations        ContentModeration[]
+  moderationQueues          ModerationQueue[]
+  patternDetections         PatternDetection[]
+  safetyEventsPrimary       SafetyEvent[]         @relation("SafetyPrimary")
+  safetyEventsTarget        SafetyEvent[]         @relation("SafetyTarget")
+  communityFeedbackGiven    CommunityFeedback[]   @relation("CommunityFeedbackGiver")
+  communityFeedbackReceived CommunityFeedback[]   @relation("CommunityFeedbackTarget")
+  trustScoreHistory         TrustScoreHistory[]
+  moderationActionLogs      ModerationActionLog[]
+
+  @@map("users")
+}
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic info
+  height     Int?
+  education  String?
+  occupation String?
+  religion   String?
+  ethnicity  String?
+
+  // Lifestyle
+  smoking  String? // never, occasionally, regularly
+  drinking String? // never, occasionally, regularly
+  exercise String? // never, sometimes, regularly
+  diet     String? // vegetarian, vegan, omnivore, etc.
+
+  // Interests & hobbies
+  interests      String[] // Array of interest tags
+  musicGenres    String[]
+  favoriteMovies String[]
+  favoriteBooks  String[]
+
+  // Personality
+  personalityTraits String[] // extroverted, introverted, etc.
+  loveLanguage      String? // words, acts, gifts, etc.
+
+  // Preferences
+  relationshipGoals String? // casual, serious, marriage
+  children          String? // want, don't want, have
+  pets              String? // cats, dogs, both, none
+
+  // Compatibility scores
+  compatibilityScore Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model Match {
+  id         String @id @default(cuid())
+  senderId   String
+  receiverId String
+  sender     User   @relation("Sender", fields: [senderId], references: [id])
+  receiver   User   @relation("Receiver", fields: [receiverId], references: [id])
+
+  // Matching scores
+  overallScore       Float
+  compatibilityScore Float
+  locationScore      Float
+  interestScore      Float
+  personalityScore   Float
+
+  // User custom weights
+  compatibilityWeight Float @default(0.3)
+  locationWeight      Float @default(0.2)
+  interestWeight      Float @default(0.25)
+  personalityWeight   Float @default(0.25)
+
+  status    String   @default("pending") // pending, accepted, rejected
+  createdAt DateTime @default(now())
+
+  // Transparency
+  transparency AlgorithmTransparency?
+
+  @@unique([senderId, receiverId])
+  @@map("matches")
+}
+
+model Like {
+  id      String @id @default(cuid())
+  likerId String
+  likedId String
+  liker   User   @relation("Liker", fields: [likerId], references: [id])
+  liked   User   @relation("Liked", fields: [likedId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([likerId, likedId])
+  @@map("likes")
+}
+
+model UserAnalytics {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Profile performance
+  profileViews     Int @default(0)
+  likesReceived    Int @default(0)
+  matchesMade      Int @default(0)
+  messagesSent     Int @default(0)
+  messagesReceived Int @default(0)
+
+  // Engagement metrics
+  appOpens   Int      @default(0)
+  timeSpent  Int      @default(0) // in minutes
+  lastActive DateTime @default(now())
+
+  // Success metrics
+  conversationsStarted Int @default(0)
+  datesScheduled       Int @default(0)
+  relationshipsFormed  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_analytics")
+}
+
+model SessionLimit {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date           DateTime // Date of the session
+  profilesViewed Int      @default(0)
+  maxProfiles    Int      @default(10) // Daily limit
+  sessionTime    Int      @default(0) // Time spent in minutes
+  maxSessionTime Int      @default(60) // Max session time in minutes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@map("session_limits")
+}
+
+model AlgorithmTransparency {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  matchId String? @unique
+  match   Match?  @relation(fields: [matchId], references: [id])
+
+  // Transparency data
+  factors   Json // Detailed breakdown of matching factors
+  weights   Json // User's custom weights
+  reasoning String // Human-readable explanation
+
+  createdAt DateTime @default(now())
+
+  @@map("algorithm_transparency")
+}
+
+model Conversation {
+  id           String   @id @default(cuid())
+  participants String[] // Array of user IDs
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Messages
+  messages Message[]
+  user     User?     @relation(fields: [userId], references: [id])
+  userId   String?
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation("MessageSender", fields: [senderId], references: [id])
+
+  content     String
+  messageType String    @default("text") // text, image, voice, video
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+
+  // Moderation
+  isModerated      Boolean @default(false)
+  moderationReason String?
+  isBlocked        Boolean @default(false)
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  messageReports MessageReport[]
+
+  @@map("messages")
+}
+
+model ConversationStarter {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  prompt String // The AI-generated conversation starter
+  isUsed Boolean   @default(false)
+  usedAt DateTime?
+
+  // Context
+  targetUserId    String?
+  sharedInterests String[] // Interests that prompted this starter
+
+  createdAt DateTime @default(now())
+
+  @@map("conversation_starters")
+}
+
+model MessageReport {
+  id        String  @id @default(cuid())
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  reporterId String
+  reporter   User   @relation(fields: [reporterId], references: [id])
+
+  reason      String // harassment, spam, inappropriate, etc.
+  description String?
+  status      String  @default("pending") // pending, reviewed, resolved
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  @@map("message_reports")
+}
+
+// Enhanced Safety & Trust Models for ConnectHub
+// Sprint 4: Enhanced Safety Features
+
+model TrustScore {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Trust metrics
+  overallScore      Float @default(50.0) // 0-100 scale
+  behaviorScore     Float @default(50.0) // User behavior rating
+  communityScore    Float @default(50.0) // Community feedback rating
+  verificationScore Float @default(50.0) // Verification quality score
+
+  // Tracking
+  totalReports    Int @default(0)
+  resolvedReports Int @default(0)
+  reportsThisWeek Int @default(0)
+
+  // Status
+  trustLevel  String   @default("standard") // standard, trusted, verified, suspended
+  lastUpdated DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("trust_scores")
+}
+
+model ContentModeration {
+  id String @id @default(cuid())
+
+  // Content reference
+  contentType String // message, profile, image
+  contentId   String
+  contentHash String? // For duplicate detection
+
+  // User relation
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Moderation details
+  isFlagged  Boolean @default(false)
+  flagReason String? // harassment, spam, inappropriate, sexual, violence, hate
+  confidence Float? // AI confidence score (0-1)
+  severity   String? // low, medium, high, critical
+
+  // Review
+  requiresReview Boolean @default(true)
+  reviewedBy     String? // Moderator ID
+  reviewStatus   String  @default("pending") // pending, approved, rejected, escalated
+  reviewNotes    String?
+
+  // AI Analysis
+  aiAnalysis       Json? // Detailed AI analysis results
+  keywordsDetected String[] // Detected problematic keywords
+  sentimentScore   Float? // Sentiment analysis (-1 to 1)
+
+  // Actions taken
+  actionTaken     String? // none, warning, temporary_block, permanent_ban, content_removal
+  actionExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("content_moderation")
+}
+
+model ModerationQueue {
+  id String @id @default(cuid())
+
+  // Queue details
+  queueType String // urgent, standard, review
+  priority  Int    @default(0) // Higher = more urgent
+
+  // Content reference
+  contentType String
+  contentId   String
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Review assignment
+  assignedTo String? // Moderator ID
+  assignedAt DateTime?
+
+  // Review process
+  reviewStatus String  @default("pending") // pending, in_progress, completed, escalated
+  reviewNotes  String?
+  timeSpent    Int? // Minutes spent on review
+
+  // Auto-actions
+  autoProcessed Boolean @default(false)
+  autoAction    String?
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+
+  @@map("moderation_queue")
+}
+
+model PatternDetection {
+  id String @id @default(cuid())
+
+  // Pattern type
+  patternType String // harassment, spam, bot, suspicious_behavior, coordinated_activity
+
+  // Detection details
+  detectionScore Float // Confidence in pattern (0-1)
+  triggers       String[] // What triggered this detection
+  patternData    Json // Detailed pattern information
+
+  // Affected entities
+  primaryUserId  String? // Main user associated
+  relatedUserIds String[] // Other users involved
+  primaryUser    User?    @relation(fields: [primaryUserId], references: [id])
+
+  // Status
+  isActive   Boolean @default(true)
+  isVerified Boolean @default(false) // Confirmed by human review
+  severity   String  @default("low") // low, medium, high, critical
+
+  // Actions
+  autoActionTaken     String?
+  requiresHumanReview Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("pattern_detection")
+}
+
+model UserRestrictions {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Restriction details
+  restrictionType String // temporary_suspension, permanent_suspension, feature_limit, content_restriction
+  reason          String
+  severity        String // warning, moderate, severe, critical
+
+  // Scope
+  scope            String // global, messaging, matching, profile_editing
+  affectedFeatures String[] // List of features affected
+
+  // Timing
+  startsAt  DateTime
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+
+  // Review
+  appliedBy  String? // Admin/moderator who applied
+  reviewedBy String? // Who reviewed the restriction
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_restrictions")
+}
+
+model SafetyEvent {
+  id String @id @default(cuid())
+
+  // Event details
+  eventType String // report_submitted, content_flagged, pattern_detected, restriction_applied, user_blocked
+  severity  String // info, warning, error, critical
+
+  // Participants
+  primaryUserId String?
+  targetUserId  String?
+  moderatorId   String?
+  primaryUser   User?   @relation("SafetyPrimary", fields: [primaryUserId], references: [id])
+  targetUser    User?   @relation("SafetyTarget", fields: [targetUserId], references: [id])
+
+  // Event data
+  description String
+  metadata    Json?
+
+  // Resolution
+  isResolved Boolean   @default(false)
+  resolvedAt DateTime?
+  resolution String?
+
+  createdAt DateTime @default(now())
+
+  @@map("safety_events")
+}
+
+model CommunityFeedback {
+  id String @id @default(cuid())
+
+  // Feedback details
+  feedbackType String // positive, negative, report, suggestion
+
+  // Source
+  giverId  String? // User providing feedback
+  targetId String? // User being evaluated
+  giver    User?   @relation("CommunityFeedbackGiver", fields: [giverId], references: [id])
+  target   User?   @relation("CommunityFeedbackTarget", fields: [targetId], references: [id])
+
+  // Content
+  rating   Int? // 1-5 star rating
+  feedback String // Written feedback
+
+  // Categories
+  categories String[] // respectful, appropriate, genuine, safe, etc.
+
+  // Context
+  relatedMatchId   String?
+  relatedMessageId String?
+
+  // Status
+  isPublic    Boolean @default(false)
+  isVerified  Boolean @default(false)
+  impactScore Float   @default(0) // How much this affects trust scores
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("community_feedback")
+}
+
+model TrustScoreHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Historical data
+  overallScore      Float
+  behaviorScore     Float
+  communityScore    Float
+  verificationScore Float
+
+  // Context
+  changeReason String? // What caused this score change
+  changeType   String // automatic, manual_review, community_vote
+
+  // Timing
+  recordedAt DateTime @default(now())
+
+  @@map("trust_score_history")
+}
+
+model ModerationActionLog {
+  id String @id @default(cuid())
+
+  // Action details
+  actionType String // warning_sent, content_removed, user_suspended, account_banned
+  actorType  String // ai_system, moderator, admin
+
+  // Context
+  targetType String // user, message, profile, image
+  targetId   String
+
+  // User relation
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Action specifics
+  actionDetails Json
+  reasoning     String
+
+  // Impact
+  isSuccessful Boolean @default(true)
+  userResponse String? // how the user responded
+
+  createdAt DateTime @default(now())
+
+  @@map("moderation_action_log")
+}

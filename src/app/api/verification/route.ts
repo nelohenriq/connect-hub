@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Go service configuration
+const GO_SERVICE_URL = process.env.GO_VERIFICATION_SERVICE_URL || 'http://localhost:8080';
+
 // Video verification endpoint
 export async function POST(request: NextRequest) {
   try {
@@ -28,25 +31,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Implement actual verification logic
-    // 1. Send video to verification service
-    // 2. Process liveness detection
-    // 3. Generate face vectors
-    // 4. Check for duplicates
-    // 5. Store verification result
+    // Forward to Go verification service
+    const goFormData = new FormData();
+    goFormData.append('video', videoFile);
 
-    // Mock response for now
-    const verificationResult = {
-      verified: true,
-      confidence: 0.98,
-      processingTime: 2.3,
-      verificationId: `ver_${Date.now()}`,
-      timestamp: new Date().toISOString()
-    };
+    // Add optional user_id if provided
+    const userId = formData.get('user_id') as string;
+    if (userId) {
+      goFormData.append('user_id', userId);
+    }
+
+    const response = await fetch(`${GO_SERVICE_URL}/api/v1/verify`, {
+      method: 'POST',
+      body: goFormData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Verification service error' }));
+      return NextResponse.json(
+        { error: errorData.error || 'Verification service unavailable' },
+        { status: response.status }
+      );
+    }
+
+    const result = await response.json();
 
     return NextResponse.json({
       success: true,
-      data: verificationResult
+      data: result.data
     });
 
   } catch (error) {

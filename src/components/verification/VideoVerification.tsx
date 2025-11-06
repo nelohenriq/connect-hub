@@ -39,6 +39,20 @@ export default function VideoVerification({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const stopRecording = useCallback(() => {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === "recording"
+    ) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+  }, []);
+
   const startRecording = useCallback(async () => {
     try {
       setError(null);
@@ -78,25 +92,11 @@ export default function VideoVerification({
           stopRecording();
         }
       }, 10000);
-    } catch (err) {
+    } catch {
       setError("Failed to access camera. Please check permissions.");
       onError("Camera access denied");
     }
-  }, [onError]);
-
-  const stopRecording = useCallback(() => {
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state === "recording"
-    ) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-    }
-  }, []);
+  }, [onError, stopRecording]);
 
   const submitVerification = useCallback(async () => {
     if (!recordedVideo) return;
