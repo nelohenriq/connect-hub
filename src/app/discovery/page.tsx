@@ -22,6 +22,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { MatchCard } from "@/components/discovery/MatchCard";
+import { AppNavigation } from "@/components/layout/AppNavigation";
 import { useAuth } from "@/lib/auth-context";
 
 interface MatchData {
@@ -69,8 +70,10 @@ export default function DiscoveryPage() {
       router.push("/auth/login");
       return;
     }
-    loadMatches();
-  }, [isAuthenticated, isLoading, router]);
+    if (isAuthenticated && user?.id) {
+      loadMatches();
+    }
+  }, [isAuthenticated, isLoading, user?.id, router]);
   const loadMatches = async () => {
     try {
       if (!user?.id) {
@@ -117,8 +120,16 @@ export default function DiscoveryPage() {
     );
   }
 
+  const handleLogout = () => {
+    // Mock logout - replace with actual logout logic
+    router.push("/auth/login");
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Navigation */}
+      {user && <AppNavigation user={user} onLogout={handleLogout} />}
+
       {/* Header */}
       <div className="bg-background border-b border-border px-4 py-6">
         <div className="max-w-7xl mx-auto">

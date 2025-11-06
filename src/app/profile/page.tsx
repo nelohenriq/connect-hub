@@ -27,6 +27,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
+import { AppNavigation } from "@/components/layout/AppNavigation";
 import { useAuth } from "@/lib/auth-context";
 
 interface UserProfile {
@@ -113,8 +114,10 @@ export default function ProfilePage() {
       router.push("/auth/login");
       return;
     }
-    loadProfile();
-  }, [isAuthenticated, isLoading, router]);
+    if (isAuthenticated && user?.id) {
+      loadProfile();
+    }
+  }, [isAuthenticated, isLoading, user?.id, router]);
 
   const loadProfile = async () => {
     try {
@@ -242,8 +245,16 @@ export default function ProfilePage() {
     );
   }
 
+  const handleLogout = () => {
+    // Mock logout - replace with actual logout logic
+    router.push("/auth/login");
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Navigation */}
+      {user && <AppNavigation user={user} onLogout={handleLogout} />}
+
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -332,7 +343,7 @@ export default function ProfilePage() {
                     <div className="flex items-center justify-center gap-1">
                       <Calendar className="h-4 w-4" />
                       <span>
-                        Joined {profile.joinDate.toLocaleDateString()}
+                        Joined {new Date(profile.joinDate).toLocaleDateString()}
                       </span>
                     </div>
                   </div>

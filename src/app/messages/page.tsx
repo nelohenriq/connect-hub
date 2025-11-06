@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AppNavigation } from "@/components/layout/AppNavigation";
 import { useAuth } from "@/lib/auth-context";
 
 interface Conversation {
@@ -68,8 +69,10 @@ export default function MessagesPage() {
       router.push("/auth/login");
       return;
     }
-    loadConversations();
-  }, [isAuthenticated, isLoading, router]);
+    if (isAuthenticated && user?.id) {
+      loadConversations();
+    }
+  }, [isAuthenticated, isLoading, user?.id, router]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -208,8 +211,16 @@ export default function MessagesPage() {
     );
   }
 
+  const handleLogout = () => {
+    // Mock logout - replace with actual logout logic
+    router.push("/auth/login");
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Navigation */}
+      {user && <AppNavigation user={user} onLogout={handleLogout} />}
+
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
           {/* Conversations List */}

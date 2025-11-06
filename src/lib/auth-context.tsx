@@ -19,6 +19,8 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
+  profilePicture?: string;
+  isPremium?: boolean;
 }
 
 interface AuthContextType {
@@ -66,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: profileData.email,
             firstName: profileData.firstName,
             lastName: profileData.lastName,
+            profilePicture: profileData.profilePicture || null,
+            isPremium: profileData.isPremium || false,
           });
         } else {
           // Token is invalid, clear it
