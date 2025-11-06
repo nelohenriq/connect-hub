@@ -363,7 +363,7 @@ nextApp.prepare().then(() => {
   });
 
   // Handle Next.js requests with proper routing
-  app.all("*", (req, res) => {
+  app.use((req, res) => {
     return handle(req, res);
   });
 

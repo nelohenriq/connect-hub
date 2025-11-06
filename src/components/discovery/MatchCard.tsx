@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -73,9 +74,11 @@ export function MatchCard({ match, onAction, loading }: MatchCardProps) {
     <Card className="w-full max-w-sm mx-auto overflow-hidden">
       <div className="relative">
         {match.profilePicture ? (
-          <img
+          <Image
             src={match.profilePicture}
             alt={`${match.firstName} ${match.lastName}`}
+            width={400}
+            height={256}
             className="w-full h-64 object-cover"
           />
         ) : (
