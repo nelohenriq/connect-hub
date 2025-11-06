@@ -43,3 +43,35 @@ export class AuthService {
     })
   }
 }
+
+// Client-side auth utilities
+export const getAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('authToken')
+}
+
+export const setAuthToken = (token: string): void => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem('authToken', token)
+}
+
+export const removeAuthToken = (): void => {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem('authToken')
+}
+
+export const getCurrentUserId = (): string | null => {
+  const token = getAuthToken()
+  if (!token) return null
+
+  try {
+    const payload = jwt.decode(token) as JWTPayload
+    return payload?.userId || null
+  } catch {
+    return null
+  }
+}
+
+export const isAuthenticated = (): boolean => {
+  return getAuthToken() !== null && getCurrentUserId() !== null
+}

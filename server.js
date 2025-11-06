@@ -29,9 +29,13 @@ nextApp.prepare().then(() => {
   );
 
   // CORS configuration
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",")
+    : [process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"];
+
   app.use(
     cors({
-      origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      origin: corsOrigins,
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
@@ -40,8 +44,8 @@ nextApp.prepare().then(() => {
 
   // Rate limiting for API routes
   const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to requests per windowMs
     message: {
       error: "Too many requests, please try again later.",
     },
@@ -55,14 +59,14 @@ nextApp.prepare().then(() => {
   const server = createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      origin: corsOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
     transports: ["websocket", "polling"],
     timeout: 20000,
-    pingTimeout: 60000,
-    pingInterval: 25000,
+    pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT) || 60000,
+    pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL) || 25000,
   });
 
   // Store connected users and their socket IDs

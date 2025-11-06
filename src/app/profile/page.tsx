@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   Camera,
@@ -26,6 +27,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
 
 interface UserProfile {
   id: string;
@@ -87,6 +89,8 @@ const personalityOptions = [
 ];
 
 export default function ProfilePage() {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -105,61 +109,68 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/auth/login");
+      return;
+    }
     loadProfile();
-  }, []);
+  }, [isAuthenticated, isLoading, router]);
 
   const loadProfile = async () => {
     try {
-      // Mock data - replace with API call
-      const mockProfile: UserProfile = {
-        id: "current-user",
-        firstName: "Alex",
-        lastName: "Johnson",
-        email: "alex.johnson@connecthub.com",
-        age: 28,
-        bio: "Software developer who loves hiking, photography, and trying new restaurants. Looking for someone to share adventures with!",
-        location: "San Francisco, CA",
-        occupation: "Software Engineer",
-        education: "Stanford University",
-        profilePicture: "/placeholder-avatar.jpg",
-        interests: ["Photography", "Hiking", "Technology", "Food", "Travel"],
-        personalityTraits: [
-          "Adventurous",
-          "Creative",
-          "Analytical",
-          "Outgoing",
-        ],
-        profileCompleteness: 85,
-        joinDate: new Date("2024-01-15"),
-        lastActive: new Date(),
-        isPremium: false,
-      };
+      if (!user?.id) {
+        throw new Error("No authenticated user");
+      }
 
-      setProfile(mockProfile);
+      // Call the API to get profile data
+      const response = await fetch(`/api/profiles?userId=${user.id}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch profile");
+      }
+      const profileData = await response.json();
+
+      setProfile(profileData);
       setFormData({
-        firstName: mockProfile.firstName,
-        lastName: mockProfile.lastName,
-        bio: mockProfile.bio,
-        location: mockProfile.location,
-        occupation: mockProfile.occupation,
-        education: mockProfile.education,
-        interests: mockProfile.interests,
-        personalityTraits: mockProfile.personalityTraits,
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        bio: profileData.bio,
+        location: profileData.location,
+        occupation: profileData.occupation,
+        education: profileData.education,
+        interests: profileData.interests || [],
+        personalityTraits: profileData.personalityTraits || [],
       });
     } catch (error) {
       console.error("Error loading profile:", error);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!profile) return;
+    if (!profile || !user?.id) return;
 
     setSaving(true);
     try {
-      // Mock API call - replace with actual API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Call the API to update profile
+      const response = await fetch("/api/profiles", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          ...formData,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update profile");
+      }
+
+      const result = await response.json();
+      console.log("Profile updated successfully:", result);
 
       setProfile({
         ...profile,
@@ -207,7 +218,7 @@ export default function ProfilePage() {
     }));
   };
 
-  if (loading) {
+  if (isLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -223,7 +234,7 @@ export default function ProfilePage() {
           <h2 className="text-xl font-semibold text-foreground mb-2">
             Profile not found
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-6">
             Unable to load your profile information.
           </p>
         </div>

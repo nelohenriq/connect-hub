@@ -15,9 +15,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -32,16 +34,33 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Simulate login - replace with actual auth logic
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-      // Mock successful login
-      console.log("Login attempted:", formData);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // Use auth context to login
+      if (data.token && data.user) {
+        login(data.token, data.user);
+      }
 
       // Redirect to dashboard
       router.push("/");
-    } catch {
-      setError("Invalid email or password. Please try again.");
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Invalid email or password. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -75,6 +94,13 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Development credentials hint */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>Development:</strong> Use <code>test@example.com</code>{" "}
+                / <code>password</code> to sign in
+              </p>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <Alert variant="destructive">

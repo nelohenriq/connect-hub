@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/lib/auth-context";
 
 interface Conversation {
   id: string;
@@ -52,6 +53,7 @@ interface Message {
 
 export default function MessagesPage() {
   const router = useRouter();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<
     string | null
@@ -62,77 +64,39 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/auth/login");
+      return;
+    }
     loadConversations();
-  }, []);
+  }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
     if (selectedConversation) {
       loadMessages();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation]);
 
   const loadConversations = async () => {
     try {
-      // Mock data - replace with API call
-      const mockConversations: Conversation[] = [
-        {
-          id: "1",
-          participant: {
-            id: "1",
-            firstName: "Sarah",
-            lastName: "Chen",
-            profilePicture: "/placeholder-avatar.jpg",
-            isOnline: true,
-          },
-          lastMessage: {
-            content: "Hey! I saw we both love hiking. Want to plan a trip?",
-            timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-            isFromUser: false,
-          },
-          unreadCount: 2,
-          isTyping: false,
-        },
-        {
-          id: "2",
-          participant: {
-            id: "2",
-            firstName: "Mike",
-            lastName: "Rodriguez",
-            profilePicture: "/placeholder-avatar.jpg",
-            isOnline: false,
-          },
-          lastMessage: {
-            content: "That new restaurant downtown looks amazing!",
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-            isFromUser: true,
-          },
-          unreadCount: 0,
-          isTyping: false,
-        },
-        {
-          id: "3",
-          participant: {
-            id: "3",
-            firstName: "Emma",
-            lastName: "Thompson",
-            profilePicture: "/placeholder-avatar.jpg",
-            isOnline: true,
-          },
-          lastMessage: {
-            content: "Thanks for the museum recommendation! It was wonderful.",
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-            isFromUser: false,
-          },
-          unreadCount: 1,
-          isTyping: true,
-        },
-      ];
-      setConversations(mockConversations);
-      if (mockConversations.length > 0) {
-        setSelectedConversation(mockConversations[0].id);
+      if (!user?.id) {
+        throw new Error("No authenticated user");
+      }
+
+      // Call the API to get conversations
+      const response = await fetch(`/api/messages?userId=${user.id}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch conversations");
+      }
+      const data = await response.json();
+      setConversations(data.conversations || []);
+      if (data.conversations && data.conversations.length > 0) {
+        setSelectedConversation(data.conversations[0].id);
       }
     } catch (error) {
       console.error("Error loading conversations:", error);
+      setConversations([]);
     } finally {
       setLoading(false);
     }
@@ -140,62 +104,37 @@ export default function MessagesPage() {
 
   const loadMessages = async () => {
     try {
-      // Mock messages - replace with API call
-      const mockMessages: Message[] = [
-        {
-          id: "1",
-          content:
-            "Hi Sarah! I saw your profile and we seem to have a lot in common.",
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-          isFromUser: true,
-          status: "read",
-        },
-        {
-          id: "2",
-          content:
-            "Hey! Thanks for reaching out. I noticed we both love photography and hiking.",
-          timestamp: new Date(
-            Date.now() - 1000 * 60 * 60 * 24 * 2 + 1000 * 60 * 5
-          ),
-          isFromUser: false,
-          status: "read",
-        },
-        {
-          id: "3",
-          content:
-            "Absolutely! I just got a new camera and I'm looking for good spots to try it out.",
-          timestamp: new Date(
-            Date.now() - 1000 * 60 * 60 * 24 * 2 + 1000 * 60 * 10
-          ),
-          isFromUser: true,
-          status: "read",
-        },
-        {
-          id: "4",
-          content:
-            "That sounds amazing! There's this great trail in Marin County with stunning views.",
-          timestamp: new Date(
-            Date.now() - 1000 * 60 * 60 * 24 * 2 + 1000 * 60 * 15
-          ),
-          isFromUser: false,
-          status: "read",
-        },
-        {
-          id: "5",
-          content: "Hey! I saw we both love hiking. Want to plan a trip?",
-          timestamp: new Date(Date.now() - 1000 * 60 * 30),
-          isFromUser: false,
-          status: "delivered",
-        },
-      ];
-      setMessages(mockMessages);
+      if (!selectedConversation || !user?.id) {
+        console.error("No conversation selected or no authenticated user");
+        setMessages([]);
+        return;
+      }
+
+      // Call the API to get messages for the selected conversation
+      const response = await fetch(
+        `/api/messages?userId=${user.id}&conversationId=${selectedConversation}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch messages");
+      }
+      const data = await response.json();
+      setMessages(data.messages || []);
     } catch (error) {
       console.error("Error loading messages:", error);
+      setMessages([]);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation) return;
+    if (!newMessage.trim() || !selectedConversation || !user?.id) return;
+
+    const selectedConv = conversations.find(
+      (c) => c.id === selectedConversation
+    );
+    if (!selectedConv) {
+      console.error("Selected conversation not found");
+      return;
+    }
 
     const message: Message = {
       id: Date.now().toString(),
@@ -205,11 +144,36 @@ export default function MessagesPage() {
       status: "sent",
     };
 
+    // Optimistically add message to UI
     setMessages((prev) => [...prev, message]);
     setNewMessage("");
 
-    // Here you would typically send the message to the server
-    console.log("Sending message:", message);
+    try {
+      // Send message to API
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          senderId: user.id,
+          receiverId: selectedConv.participant.id,
+          content: newMessage.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send message");
+      }
+
+      const data = await response.json();
+      // Update message with server response if needed
+      console.log("Message sent successfully:", data);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // Remove optimistically added message on error
+      setMessages((prev) => prev.filter((m) => m.id !== message.id));
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -236,7 +200,7 @@ export default function MessagesPage() {
 
   const selectedConv = conversations.find((c) => c.id === selectedConversation);
 
-  if (loading) {
+  if (isLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

@@ -1,93 +1,154 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { AuthService } from '@/lib/auth'
-import { z } from 'zod'
+import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
 
-const createProfileSchema = z.object({
-  height: z.number().optional(),
-  education: z.string().optional(),
-  occupation: z.string().optional(),
-  religion: z.string().optional(),
-  ethnicity: z.string().optional(),
-  smoking: z.enum(['never', 'occasionally', 'regularly']).optional(),
-  drinking: z.enum(['never', 'occasionally', 'regularly']).optional(),
-  exercise: z.enum(['never', 'sometimes', 'regularly']).optional(),
-  diet: z.string().optional(),
-  interests: z.array(z.string()).optional(),
-  musicGenres: z.array(z.string()).optional(),
-  favoriteMovies: z.array(z.string()).optional(),
-  favoriteBooks: z.array(z.string()).optional(),
-  personalityTraits: z.array(z.string()).optional(),
-  loveLanguage: z.string().optional(),
-  relationshipGoals: z.enum(['casual', 'serious', 'marriage']).optional(),
-  children: z.enum(['want', 'dont_want', 'have']).optional(),
-  pets: z.enum(['cats', 'dogs', 'both', 'none']).optional()
-})
+const prisma = new PrismaClient();
 
-// GET /api/profiles - Get current user's profile
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      );
     }
 
-    const token = authHeader.substring(7)
-    const user = await AuthService.getUserFromToken(token)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        profile: true,
+        trustScore: true,
+        analytics: true,
+      },
+    });
 
     if (!user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
     }
 
-    const profile = await prisma.profile.findUnique({
-      where: { userId: user.id }
-    })
+    // Calculate age from date of birth
+    const age = Math.floor((Date.now() - user.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
 
-    if (!profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
-    }
+    // Calculate profile completeness
+    const profileFields = [
+      user.bio,
+      user.location,
+      user.profilePicture,
+      user.profile?.occupation,
+      user.profile?.education,
+      user.profile?.height,
+      user.profile?.religion,
+      user.profile?.ethnicity,
+      user.profile?.smoking,
+      user.profile?.drinking,
+      user.profile?.exercise,
+      user.profile?.diet,
+      user.profile?.relationshipGoals,
+      user.profile?.children,
+      user.profile?.pets,
+    ];
 
-    return NextResponse.json(profile)
+    const completedFields = profileFields.filter(field => field !== null && field !== undefined && field !== "").length;
+    const profileCompleteness = Math.round((completedFields / profileFields.length) * 100);
+
+    const profileData = {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      age,
+      bio: user.bio,
+      location: user.location,
+      occupation: user.profile?.occupation,
+      education: user.profile?.education,
+      profilePicture: user.profilePicture,
+      interests: user.profile?.interests || [],
+      personalityTraits: user.profile?.personalityTraits || [],
+      profileCompleteness,
+      joinDate: user.createdAt,
+      lastActive: user.analytics?.lastActive || user.updatedAt,
+      isPremium: false, // TODO: Implement premium logic
+      trustScore: user.trustScore?.overallScore || 50,
+    };
+
+    return NextResponse.json(profileData);
+
   } catch (error) {
-    console.error('Profile fetch error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Error fetching profile:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch profile" },
+      { status: 500 }
+    );
   }
 }
 
-// POST /api/profiles - Create or update profile
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const body = await request.json();
+    const { userId, ...updateData } = body;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      );
     }
 
-    const token = authHeader.substring(7)
-    const user = await AuthService.getUserFromToken(token)
+    // Separate user and profile fields
+    const userFields = {
+      firstName: updateData.firstName,
+      lastName: updateData.lastName,
+      bio: updateData.bio,
+      location: updateData.location,
+    };
 
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    const profileFields = {
+      occupation: updateData.occupation,
+      education: updateData.education,
+      interests: updateData.interests,
+      personalityTraits: updateData.personalityTraits,
+    };
+
+    // Update user data
+    await prisma.user.update({
+      where: { id: userId },
+      data: userFields,
+    });
+
+    // Update or create profile data
+    const existingProfile = await prisma.profile.findUnique({
+      where: { userId },
+    });
+
+    if (existingProfile) {
+      await prisma.profile.update({
+        where: { userId },
+        data: profileFields,
+      });
+    } else {
+      await prisma.profile.create({
+        data: {
+          userId,
+          ...profileFields,
+        },
+      });
     }
 
-    const body = await request.json()
-    const validatedData = createProfileSchema.parse(body)
+    return NextResponse.json({
+      success: true,
+      message: "Profile updated successfully",
+    });
 
-    const profile = await prisma.profile.upsert({
-      where: { userId: user.id },
-      update: validatedData,
-      create: {
-        userId: user.id,
-        ...validatedData
-      }
-    })
-
-    return NextResponse.json(profile)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid data', details: error.issues }, { status: 400 })
-    }
-
-    console.error('Profile creation error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Error updating profile:", error);
+    return NextResponse.json(
+      { error: "Failed to update profile" },
+      { status: 500 }
+    );
   }
 }
